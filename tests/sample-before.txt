@@ -1,0 +1,1 @@
+The treatment group showed a 42% improvement (p = 0.03, 95% CI [11%, 61%]). No significant difference was observed between the control and placebo arms (Figure 2). As Smith et al. (2021) reported in \cite{smith2021}, the association was dose-dependent.
