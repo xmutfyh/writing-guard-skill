@@ -5,28 +5,31 @@ description: >-
   audit manuscript prose for AI mechanical phrasing, process residue, and defensive disclaimers,
   and protect research facts during polishing — numbers, citations, claim strength, negation,
   scope must not be silently changed (Scholarship Lock + Epistemic Lock). Also computes author
-  style profiles and journal writing profiles, and scores section-level Journal Fit.
+  style profiles and journal writing profiles, scores section-level Journal Fit, and detects
+  context-to-artifact leakage in final deliverables (CAL detection).
   论文写作纪律守卫（本地确定性脚本，零网络零依赖）：审计稿件的 AI 腔、修改过程残留、自黑免责，
   润色时用 Scholarship/Epistemic Lock 守住数字/引用/主张强度/否定/scope，支持作者风格档案与
-  期刊写作档案 + Journal Fit。Use when writing, polishing, refactoring academic papers
+  期刊写作档案 + Journal Fit，并检测被否决方案和修改过程泄漏到最终交付物（CAL 检测）。
+  Use when writing, polishing, refactoring academic papers
   (LaTeX/Markdown, Chinese/English) or preparing a submission to a specific journal.
 license: MIT
 compatibility: Node.js >= 18 (no third-party dependencies, no network access)
 metadata:
-  engine-version: 1.6.2
-  engine-provenance: compiled from dsh-plugin-writing-guard v1.6.2 (MIT)
+  engine-version: 1.7.0
+  engine-provenance: compiled from dsh-plugin-writing-guard v1.7.0 (MIT)
 ---
 
 # 论文写作纪律守卫（writing-guard-skill）
 
-把学术写作/润色任务交给本地确定性引擎执行：**去 AI 腔、清修改残留、清自黑免责，同时锁死科研事实**。
-引擎 = `engine/rules.mjs`（由 `dsh-plugin-writing-guard` v1.6.2 编译而来，MIT，零网络零 LLM 零依赖）。
+把学术写作/润色任务交给本地确定性引擎执行：**去 AI 腔、清修改残留、清自黑免责，锁死科研事实，交付物清洁**。
+引擎 = `engine/rules.mjs`（由 `dsh-plugin-writing-guard` v1.7.0 编译而来，MIT，零网络零 LLM 零依赖）。
 
 ## 什么时候用
 
 - 用户要**写、润色、改写**论文段落/章节（LaTeX / Markdown，中英文）；
 - 用户要**投稿前自查**、回复信（rebuttal）起草、投稿信（cover letter）起草；
-- 用户指定了**目标期刊**，想检查稿件与期刊写作习惯的契合度（Journal Fit）。
+- 用户指定了**目标期刊**，想检查稿件与期刊写作习惯的契合度（Journal Fit）；
+- 用户要**检查交付物**（commit message / title / PR / release notes）是否泄漏了被否决方案。
 
 ## 工作流程
 
@@ -36,7 +39,7 @@ metadata:
 node scripts/audit.mjs rules
 ```
 
-输出 8 类纪律速查。完整规则集在 `references/writing-discipline.md`（写作时按需读取该文件）。
+输出 9 类纪律速查。完整规则集在 `references/writing-discipline.md`（写作时按需读取该文件）。
 
 **优先级阶梯（任何冲突时按此排序）**：
 Scientific Invariant > Epistemic Safety > Journal Requirement > Journal Norm > Journal Style。
@@ -95,20 +98,33 @@ node scripts/audit.mjs audit --file paper_v2.tex --journal-profile journal.json 
 输出 section-level Journal Fit（每章节契合度百分比 + 主要差异 + 目标分布）。
 期刊风格调整**只能**改句法/语态/引用/修辞密度，不能改科学内容。
 
-### 第 6 步：提交前自查
+### 第 6 步（可选）：交付物 CAL 检测
+
+```bash
+node scripts/audit.mjs audit --text "Replace Toast with inline validation" \
+  --baseline "export default function Form() { ... }" \
+  --rejected-terms Toast
+```
+
+检测交付物（commit message / title / heading）是否泄漏了被否决方案、修改过程残留
+或来源信息。传入 `--baseline` 做基线真实性检查，`--rejected-terms` / `--rejected-claims`
+提供被否决上下文。
+
+### 第 7 步：提交前自查
 
 润色/改写完成后按序执行：
 1. `audit --original-file <改前版本>` —— INVARIANT/HIGH 清零；
 2. `audit --file <终稿> --verbose` —— VIOLATION 清零、CANDIDATE 逐条人工判定；
 3. （有期刊档案时）Journal Fit 复查；
-4. 向用户汇报：改了哪些、为什么、锁住了哪些实体。
+4. （交付物发布前）CAL 检查 —— 确认被否决方案未泄漏到 commit message / PR / release notes；
+5. 向用户汇报：改了哪些、为什么、锁住了哪些实体。
 
 ## CLI 参考
 
 | 子命令 | 关键参数 | 输出 |
 |---|---|---|
 | `rules` | — | 写作纪律速查（Markdown） |
-| `audit` | `--file` / `--text`；`--profile manuscript\|rebuttal\|cover_letter\|review\|notes`；`--original` / `--original-file`；`--style-profile <json>`；`--journal-profile <json>`；`--project-term <词>`（可重复）；`--bib <path>`；`--min-severity low\|medium\|high`；`--json`；`--verbose`；`--fail-on-high` | 人类可读报告或 `--json` 原始 JSON |
+| `audit` | `--file` / `--text`；`--profile manuscript\|rebuttal\|cover_letter\|review\|notes`；`--original` / `--original-file`；`--style-profile <json>`；`--journal-profile <json>`；`--baseline <text>`；`--rejected-terms <term>`（可重复）；`--rejected-claims <claim>`（可重复）；`--project-term <词>`（可重复）；`--bib <path>`；`--min-severity low\|medium\|high`；`--json`；`--verbose`；`--fail-on-high` | 人类可读报告或 `--json` 原始 JSON |
 | `style-profile` | `--file` / `--dir`；`--out <path>` | 风格档案 JSON（句长/段长节奏指纹） |
 | `journal-profile` | `--file` / `--dir`；`--journal`；`--article-type`；`--discipline`；`--out <path>` | 期刊档案 JSON（章节句法/引用/epistemic/rhetorical moves 分布） |
 
@@ -121,7 +137,8 @@ node scripts/audit.mjs audit --file paper_v2.tex --journal-profile journal.json 
 - 全部规则是**概率信号**：命中即人工复核；专业术语（robust regression、耦合机理）与正当 limitations 不因报警而删改。
 - CANDIDATE 类（"we do not claim…"边界声明、低相似度漂移）可能承担正当 epistemic boundary——不要自动删除。
 - 零网络：不访问任何外部服务；脚本仅读取本地文件。
-- 引擎 v1.6.2：与 DSH 插件 `dsh-plugin-writing-guard` 同一规则集；DSH 环境优先用插件工具（`writing_audit` 等）。
+- 确定性规则（正则 + 归一化）无法覆盖所有语义改写（semantic paraphrase），DELIVERY 层的检测范围是可用正则表达的泄漏模式，仍需人工 review。
+- 引擎 v1.7.0：与 DSH 插件 `dsh-plugin-writing-guard` 同一规则集；DSH 环境优先用插件工具（`writing_audit` / `writing_delivery_audit` 等）。
 
 ## 文件布局
 
@@ -129,7 +146,7 @@ node scripts/audit.mjs audit --file paper_v2.tex --journal-profile journal.json 
 writing-guard-skill/
 ├── SKILL.md                      # 本文件（工作流 + CLI）
 ├── scripts/audit.mjs             # CLI 入口（Node >= 18，零依赖）
-├── engine/rules.mjs              # 编译好的规则引擎（v1.6.2，MIT）
+├── engine/rules.mjs              # 编译好的规则引擎（v1.7.0，MIT）
 ├── references/writing-discipline.md  # 完整静态规则集（写作时按需读）
 └── tests/                        # 样例与自检脚本
 ```
