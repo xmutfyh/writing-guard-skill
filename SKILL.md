@@ -1,152 +1,181 @@
 ---
-name: writing-guard-skill
-description: >-
-  Academic-writing discipline guard (deterministic, zero-network, zero-dependency Node script):
-  audit manuscript prose for AI mechanical phrasing, process residue, and defensive disclaimers,
-  and protect research facts during polishing — numbers, citations, claim strength, negation,
-  scope must not be silently changed (Scholarship Lock + Epistemic Lock). Also computes author
-  style profiles and journal writing profiles, scores section-level Journal Fit, and detects
-  context-to-artifact leakage in final deliverables (CAL detection).
-  论文写作纪律守卫（本地确定性脚本，零网络零依赖）：审计稿件的 AI 腔、修改过程残留、自黑免责，
-  润色时用 Scholarship/Epistemic Lock 守住数字/引用/主张强度/否定/scope，支持作者风格档案与
-  期刊写作档案 + Journal Fit，并检测被否决方案和修改过程泄漏到最终交付物（CAL 检测）。
-  Use when writing, polishing, refactoring academic papers
-  (LaTeX/Markdown, Chinese/English) or preparing a submission to a specific journal.
-license: MIT
-compatibility: Node.js >= 18 (no third-party dependencies, no network access)
-metadata:
-  engine-version: 1.7.0
-  engine-provenance: compiled from dsh-plugin-writing-guard v1.7.0 (MIT)
+name: writing-guard
+description: 论文写作纪律检查与 Word 文档安全编辑。当用户要求检查论文写作质量、修改 Word 论文、扫描 DOCX 结构、编辑论文特定章节、验证编辑范围完整性、检测 AI 写作风格、检查修改过程残留、表格格式化为三线表、修改字体字号时触发。支持 .docx/.md/.tex/.txt 文件。触发场景包括：论文润色检查、论文修改、Word 编辑、DOCX 扫描、写作审计、去AI味、学术写作检查、写作纪律、修改标红、safe edit、section replacement、scope check、三线表、表格格式、字体修改、格式调整。Also trigger on: 帮我改这个论文、检查一下写作、修改第三章、替换某个段落、扫描文档结构、编辑后验证范围、检测 revision residue、AI 风格检测、把表格改成三线表、修改字号.
+version: 1.8.0
+author: Yuanhao Feng
 ---
 
-# 论文写作纪律守卫（writing-guard-skill）
+# Writing Guard — 论文写作审计与 Word 安全编辑
 
-把学术写作/润色任务交给本地确定性引擎执行：**去 AI 腔、清修改残留、清自黑免责，锁死科研事实，交付物清洁**。
-引擎 = `engine/rules.mjs`（由 `dsh-plugin-writing-guard` v1.7.0 编译而来，MIT，零网络零 LLM 零依赖）。
+本 skill 提供两大能力：
 
-## 什么时候用
+1. **写作纪律审计**（writing_audit / writing_word_audit）：检测修改过程残留、AI 风格、主张漂移、Scholarship/Epistemic Lock
+2. **Word 文档安全编辑**（writing_word_scan / writing_word_edit / writing_word_scope_check）：结构化扫描、局部安全编辑、范围完整性验证
+3. **Word 文档格式化**（writing_word_format_tables）：三线表格式化、字体字号调整
 
-- 用户要**写、润色、改写**论文段落/章节（LaTeX / Markdown，中英文）；
-- 用户要**投稿前自查**、回复信（rebuttal）起草、投稿信（cover letter）起草；
-- 用户指定了**目标期刊**，想检查稿件与期刊写作习惯的契合度（Journal Fit）；
-- 用户要**检查交付物**（commit message / title / PR / release notes）是否泄漏了被否决方案。
+## 路由协议
 
-## 工作流程
+### 步骤 1：判断用户意图
 
-### 第 1 步：加载写作纪律（动笔前）
+根据用户请求判断需要的能力组合：
 
-```bash
-node scripts/audit.mjs rules
-```
+| 用户意图 | 需要的工具 |
+|----------|-----------|
+| 检查论文写作质量 | `writing_audit` 或 `writing_word_audit` |
+| 修改 Word 论文的某个章节 | `writing_word_scan` → `writing_word_edit` → `writing_word_scope_check` |
+| 扫描 DOCX 结构 | `writing_word_scan` |
+| 替换论文中的某些表述 | `writing_word_edit` |
+| 编辑后验证范围 | `writing_word_scope_check` |
+| 去 AI 味 / 检查 AI 风格 | `writing_audit`（profile=rebuttal 或 manuscript） |
+| 检查修改过程残留 | `writing_audit`（传 original 参数开启 Scholarship Lock） |
+| 表格改成三线表 | `writing_word_format_tables` |
+| 修改字体字号 | 直接用 Python 脚本调用 python-docx |
 
-输出 9 类纪律速查。完整规则集在 `references/writing-discipline.md`（写作时按需读取该文件）。
+### 步骤 2：执行流程
 
-**优先级阶梯（任何冲突时按此排序）**：
-Scientific Invariant > Epistemic Safety > Journal Requirement > Journal Norm > Journal Style。
-期刊风格永远不能覆盖科学完整性：原文只支持 "associated with" 时，任何 Journal Profile 都不能推动改成 "caused"。
+#### 流程 A：论文写作审计
 
-### 第 2 步：审计文本
+1. 确定文件路径和文档类型（manuscript/rebuttal/cover_letter）
+2. 调用 `writing_audit` 或 `writing_word_audit`
+3. 解读结果并给出修改建议
+4. 如有 original 文本，传入以开启 Scholarship/Epistemic Lock
 
-```bash
-# 文件（自动按扩展名检测文档类型，自动探测同目录 .bib 做引用完整性检查）
-node scripts/audit.mjs audit --file paper.tex --verbose
+#### 流程 B：Word 文档安全编辑
 
-# 指定文档类型（rebuttal/cover letter 中 "revised / as requested" 不报警）
-node scripts/audit.mjs audit --file reply.md --profile rebuttal
+1. **扫描**：调用 `writing_word_scan` 获取文档结构
+2. **定位**：根据用户描述的章节标题确定编辑范围
+3. **编辑**：调用 `writing_word_edit` 执行安全替换
+4. **验证**：调用 `writing_word_scope_check` 确认未越界修改
 
-# 纯文本
-node scripts/audit.mjs audit --text "..." --profile manuscript
-```
+#### 流程 C：混合操作（先审计再编辑）
 
-命中性质（findingKind）处置规则：
-- `INVARIANT`（🔴 科学不变量被改）——立即处理；
-- `VIOLATION`（🔴 明确违规：修改残留/自黑免责）——应当修正；
-- `CANDIDATE`（防御性候选）——cue ≠ verdict：可能承担正当 claim 边界，
-  处置为 KEEP / TIGHTEN / REFRAME / RELOCATE / CUT / QUERY，不确定就 QUERY，**不要自动删除**；
-- `ADVISORY`（纯文体）——可保留并说明理由。
+1. 先调用 `writing_word_audit` 检查当前问题
+2. 再按流程 B 执行编辑
+3. 编辑后再次调用 `writing_word_audit` 确认问题已解决
 
-### 第 3 步：润色后回归（Scholarship + Epistemic Lock）
+### 步骤 3：报告结果
 
-每次**润色/改写之后**，必须带修改前基线复查——这是本技能的核心防线：
+- 审计结果：按严重度分类（HIGH/MEDIUM/LOW），给出具体修改建议
+- 编辑结果：展示变更清单（Change Manifest），确认范围完整性
+- 如有问题未解决，建议下一步操作
 
-```bash
-node scripts/audit.mjs audit --file paper_v2.tex --original-file paper_v1.tex --verbose
-```
+## 工具详解
 
-引擎逐实体比对修改前后：数字/百分数/p 值/CI、\cite/\ref/Figure/Table 编号/DOI、
-主张强度（因果力 × 证据力双轴）、否定/零结果标记、scope 边界、证据状态词
-（reported/observed/measured/simulated…）。语言润色**不得**改变 science——
-任何 HIGH/INVARIANT 命中都必须恢复原值或显式向用户说明是有意的科学修改。
+### writing_audit
 
-### 第 4 步（可选）：作者风格档案
+对文本执行写作纪律扫描（本地规则，零网络）。
 
-```bash
-node scripts/audit.mjs style-profile --dir ~/papers/authored/ --out style.json
-node scripts/audit.mjs audit --file paper_v2.tex --style-profile style.json --verbose
-```
+**参数：**
+- `text` 或 `filePath`：要检查的文本/文件路径
+- `profile`：文档类型（manuscript/rebuttal/cover_letter/review/notes/unknown）
+- `verbose`：是否输出每条建议（默认 false）
+- `original`：修改前原文（开启 Scholarship Lock + Epistemic Lock）
+- `styleProfile`：作者风格档案 JSON（开启句长漂移检测）
+- `journalProfile`：目标期刊档案 JSON（开启 Journal Fit 审计）
 
-检测句长分布是否偏离作者历史风格（median 漂移 + std/CV 整齐度对比）。
+**检测项：**
+- 修改过程残留（revised/本轮/投稿前…）
+- 主张校准（防御密度/限定词堆叠/强主张缺证据）
+- 修辞模式（不是X而是Y/重复绕圈/三连排比）
+- LLM 关联词（delve/tapestry/过渡词堆叠）
+- 学术文体（超长句/抽象副词/句长偏离）
+- 格式（破折号密度/Unicode 数学符号）
 
-### 第 5 步（可选）：期刊写作档案 + Journal Fit
+### writing_word_scan
 
-```bash
-node scripts/audit.mjs journal-profile --dir ~/papers/nature-comm-rep/ \
-  --journal "Nature Communications" --article-type research-article --out journal.json
-node scripts/audit.mjs audit --file paper_v2.tex --journal-profile journal.json --verbose
-```
+对 .docx 文件执行结构化扫描。
 
-输出 section-level Journal Fit（每章节契合度百分比 + 主要差异 + 目标分布）。
-期刊风格调整**只能**改句法/语态/引用/修辞密度，不能改科学内容。
+**参数：**
+- `filePath`：要扫描的 .docx 文件路径
 
-### 第 6 步（可选）：交付物 CAL 检测
+**返回：**
+- 文档 profile（manuscript/rebuttal）
+- 标题层级树
+- 段落信息（样式、复杂对象检测）
+- 表格列表
+- 受保护节点警告
 
-```bash
-node scripts/audit.mjs audit --text "Replace Toast with inline validation" \
-  --baseline "export default function Form() { ... }" \
-  --rejected-terms Toast
-```
+### writing_word_edit
 
-检测交付物（commit message / title / heading）是否泄漏了被否决方案、修改过程残留
-或来源信息。传入 `--baseline` 做基线真实性检查，`--rejected-terms` / `--rejected-claims`
-提供被否决上下文。
+对 .docx 文件执行局部安全编辑。
 
-### 第 7 步：提交前自查
+**参数：**
+- `filePath`：要编辑的 .docx 文件路径
+- `replacements`：替换列表 `[{old: "原文", new: "新文本"}]`
+- `scopeConfig`：编辑范围（可选）
+  - `startHeading` / `endHeading`：标题范围
+  - `heading`：单节标题
+- `mode`：编辑模式（text_only/structural/format_normalization）
+- `outputPath`：输出路径（可选，默认覆盖）
 
-润色/改写完成后按序执行：
-1. `audit --original-file <改前版本>` —— INVARIANT/HIGH 清零；
-2. `audit --file <终稿> --verbose` —— VIOLATION 清零、CANDIDATE 逐条人工判定；
-3. （有期刊档案时）Journal Fit 复查；
-4. （交付物发布前）CAL 检查 —— 确认被否决方案未泄漏到 commit message / PR / release notes；
-5. 向用户汇报：改了哪些、为什么、锁住了哪些实体。
+**保护规则：**
+- 不修改：页边距、页眉页脚、section break、页码、图片、参考文献、交叉引用、书签、脚注
+- 替换文本时保留原始格式（粗体、斜体、字体、颜色）
+- 复杂段落（含公式/图片/字段）使用 XML-aware 编辑
 
-## CLI 参考
+### writing_word_scope_check
 
-| 子命令 | 关键参数 | 输出 |
-|---|---|---|
-| `rules` | — | 写作纪律速查（Markdown） |
-| `audit` | `--file` / `--text`；`--profile manuscript\|rebuttal\|cover_letter\|review\|notes`；`--original` / `--original-file`；`--style-profile <json>`；`--journal-profile <json>`；`--baseline <text>`；`--rejected-terms <term>`（可重复）；`--rejected-claims <claim>`（可重复）；`--project-term <词>`（可重复）；`--bib <path>`；`--min-severity low\|medium\|high`；`--json`；`--verbose`；`--fail-on-high` | 人类可读报告或 `--json` 原始 JSON |
-| `style-profile` | `--file` / `--dir`；`--out <path>` | 风格档案 JSON（句长/段长节奏指纹） |
-| `journal-profile` | `--file` / `--dir`；`--journal`；`--article-type`；`--discipline`；`--out <path>` | 期刊档案 JSON（章节句法/引用/epistemic/rhetorical moves 分布） |
+验证编辑操作是否修改了请求范围之外的内容。
 
-- 文档类型自动检测：`.md/.tex/.txt` 正文 → manuscript；`*response*`/`*rebuttal*` → rebuttal 等（`--profile` 显式覆盖）。
-- `--json` 输出原始 report（`hits` 数组含 severity / findingKind / confidence / 位置 / 依据；顶层键：`ok` / `profile` / `summary` / `stats` / `hits`）。
-- 退出码：默认 0；`--fail-on-high` 时存在 HIGH 问题返回 1（可用于 CI）。
+**参数：**
+- `fileBefore`：编辑前的 .docx 文件路径
+- `fileAfter`：编辑后的 .docx 文件路径
+- `scopeConfig`：预期编辑范围
 
-## 边界与限制
+### writing_word_format_tables
 
-- 全部规则是**概率信号**：命中即人工复核；专业术语（robust regression、耦合机理）与正当 limitations 不因报警而删改。
-- CANDIDATE 类（"we do not claim…"边界声明、低相似度漂移）可能承担正当 epistemic boundary——不要自动删除。
-- 零网络：不访问任何外部服务；脚本仅读取本地文件。
-- 确定性规则（正则 + 归一化）无法覆盖所有语义改写（semantic paraphrase），DELIVERY 层的检测范围是可用正则表达的泄漏模式，仍需人工 review。
-- 引擎 v1.7.0：与 DSH 插件 `dsh-plugin-writing-guard` 同一规则集；DSH 环境优先用插件工具（`writing_audit` / `writing_delivery_audit` 等）。
+将 .docx 中所有表格转换为学术三线表格式。
 
-## 文件布局
+**参数：**
+- `filePath`：要格式化的 .docx 文件路径
+- `outputPath`：输出文件路径（可选，默认覆盖）
 
-```
-writing-guard-skill/
-├── SKILL.md                      # 本文件（工作流 + CLI）
-├── scripts/audit.mjs             # CLI 入口（Node >= 18，零依赖）
-├── engine/rules.mjs              # 编译好的规则引擎（v1.7.0，MIT）
-├── references/writing-discipline.md  # 完整静态规则集（写作时按需读）
-└── tests/                        # 样例与自检脚本
-```
+**三线表规则：**
+- 顶线：1.5pt 粗线
+- 表头底线：0.75pt 细线
+- 底线：1.5pt 粗线
+- 无竖线、无内部横线
+- 表头行加粗
+
+## 使用示例
+
+### 示例 1：检查论文写作质量
+
+用户：帮我检查一下 pore_scale_revised.docx 的写作质量
+
+执行：
+1. 调用 `writing_word_audit(filePath="pore_scale_revised.docx")`
+2. 解读结果，按严重度分类报告
+
+### 示例 2：修改论文特定章节
+
+用户：帮我把第三章的 "leakage-free" 改成 "zero-leakage"
+
+执行：
+1. 调用 `writing_word_scan(filePath="pore_scale_revised.docx")` 获取结构
+2. 调用 `writing_word_edit(filePath="pore_scale_revised.docx", replacements=[{old: "leakage-free", new: "zero-leakage"}], scopeConfig={startHeading: "3. Model methodology", endHeading: "4. Results and discussion"})`
+3. 调用 `writing_word_scope_check(fileBefore="原始文件", fileAfter="编辑后文件")` 验证
+
+### 示例 3：编辑后审计
+
+用户：我改了论文，帮我检查有没有问题
+
+执行：
+1. 调用 `writing_word_audit(filePath="修改后的文件")`
+2. 如有 original 文本，传入以对比 Scholarhip/Epistemic Lock
+3. 报告新增/已解决的问题
+
+### 示例 4：表格改为三线表
+
+用户：帮我把论文里的表格改成三线表
+
+执行：
+1. 调用 `writing_word_format_tables(filePath="论文.docx")`
+2. 报告转换结果
+
+## 注意事项
+
+- .docx 文件的自动审计已集成到插件的 `autoAuditOnWrite` 机制中
+- 编辑 Word 文档时，插件会自动创建备份（.bak 文件）
+- 复杂段落（含公式/图片/交叉引用）需要特别小心，插件会自动检测并警告
+- 建议在编辑前先调用 `writing_word_scan` 了解文档结构
