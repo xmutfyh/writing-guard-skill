@@ -1,94 +1,297 @@
-# writing-guard-skill
+# Writing Guard
 
-**去 AI 腔 · 守住证据 · 写向目标期刊 · 交付物清洁**
-Less AI. More Evidence. Better Journal Fit. Clean Delivery.
+[![CI](https://github.com/xmutfyh/dsh-plugin-writing-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/xmutfyh/dsh-plugin-writing-guard/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/dsh-plugin-writing-guard)](https://www.npmjs.com/package/dsh-plugin-writing-guard)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-`dsh-plugin-writing-guard`（v1.7.0）规则集的 **Agent Skill 可执行版**：一份 `SKILL.md` +
-一个零依赖 Node 脚本 + 编译好的规则引擎，供 **Claude Code**、**Codex** 及任意支持
-Agent Skills 标准的 agent 直接使用。零网络、零 LLM、零第三方依赖、纯本地正则/统计。
+## Scientific Writing & Document Integrity Guard for AI-assisted research
 
-## 与 DSH 插件的关系
+**Less AI. More Evidence. Better Journal Fit. Safer Documents.**
 
-| | DSH 插件（`dsh-plugin-writing-guard`） | 本 Skill |
-|---|---|---|
-| 运行环境 | DeepSeek Harness（Web GUI） | Claude Code / Codex / 任意 agent + Node ≥18 |
-| 调用方式 | `writing_audit` 等模型工具 | `node scripts/audit.mjs ...` |
-| 自动监听 | 文件写入后自动审计 | 显式调用（agent 按 SKILL.md 工作流执行） |
-| 规则引擎 | 同一引擎（v1.7.0，MIT） | 同一引擎（`engine/rules.mjs`，编译自 `src/rules.ts`） |
+Writing Guard is a local, deterministic guardrail for AI-assisted scientific writing.
+It protects your manuscript across five layers:
 
-DSH 环境请用插件；其他环境用本 Skill。两者规则完全一致。
+| Guard | Protects against | Risk |
+|-------|------------------|------|
+| **STYLE** | AI writing fingerprints | 机械排比、过度连接词、模板腔 |
+| **EVIDENCE** | Scientific drift | 数值、单位、引用、结论被改 |
+| **JOURNAL** | Journal mismatch | scope/style/convention 不匹配 |
+| **DELIVERY** | Context leakage | prompt、notes、workflow metadata 泄漏 |
+| **DOCUMENT** 🆕 | Document corruption | Word 格式、公式、表格、OOXML 被破坏 |
 
-## 安装
+**Local · Deterministic · Zero Network · Zero LLM · 380+ Tests**
 
-```bash
-# Claude Code（用户级）
-git clone git@github.com:xmutfyh/writing-guard-skill.git ~/.claude/skills/writing-guard-skill
-
-# Codex（用户级，或 ~/.agents/skills/ 以兼容其他 agent）
-git clone git@github.com:xmutfyh/writing-guard-skill.git ~/.codex/skills/writing-guard-skill
-
-# 项目级（团队共享，Codex/Claude Code 均可发现）
-git clone git@github.com:xmutfyh/writing-guard-skill.git <repo>/.agents/skills/writing-guard-skill
+```
+npm install dsh-plugin-writing-guard
 ```
 
-无需构建：`engine/rules.mjs` 是编译好的 ESM，直接运行。
+> Writing Guard does not write your paper for you.
+> It makes AI-assisted writing safer to ship.
+
+---
+
+## 🛡️ New in 1.8 — Word Document Guard
+
+**Change what was requested. Verify what wasn't.**
+
+AI-assisted document editing introduces a subtle risk: the requested text may improve while unrelated parts of the manuscript silently change.
+
+When you ask an AI agent to "rewrite paragraph 3 only," it may inadvertently modify:
+
+- equation structures
+- table borders
+- numbering
+- styles
+- section geometry
+- relationships
+- embedded media
+- OOXML package parts
+
+Writing Guard 1.8 introduces a **document-integrity layer** for Word manuscripts:
+
+| Feature | What it does |
+|---------|--------------|
+| **Safe scoped editing** | Only the specified range can change |
+| **Package validation** | Verifies DOCX/OOXML package integrity after editing |
+| **Structural fingerprinting** | Compares document structure before and after |
+| **Equation integrity** | Checks equation structure, numbering continuity, math-font drift |
+| **Scholarly table awareness** | Distinguishes data tables from layout/figure containers |
+| **Pre/post integrity verification** | Deterministic verification, not "I think it's fine" |
+
+### Before / After
+
+**Without Writing Guard:**
+```
+"Please improve the wording in paragraph 3."
+→ AI agent modifies DOCX.
+→ Result: paragraph looks better.
+→ Unknown: what else changed?
+```
+
+**With Writing Guard:**
+```
+"Please improve the wording in paragraph 3."
+→ Writing Guard:
+   ✓ scope validated
+   ✓ package valid
+   ✓ equations preserved
+   ✓ protected structures unchanged
+   ✓ document fingerprint checked
+→ Result: paragraph changed — and unintended document drift is detected.
+```
+
+---
 
 ## Quick Start
 
-```bash
-# 1. 写作前：加载纪律速查
-node scripts/audit.mjs rules
+```sh
+# Install
+dsh plugin add dsh-plugin-writing-guard
 
-# 2. 审计稿件（自动检测文档类型 + 同目录 .bib 引用完整性）
-node scripts/audit.mjs audit --file paper.tex --verbose
-
-# 3. 润色后回归（Scholarship + Epistemic Lock：数字/引用/主张/scope 不得被悄悄改动）
-node scripts/audit.mjs audit --file paper_v2.tex --original-file paper_v1.tex --verbose
-
-# 4. 可选：作者风格档案（句长分布漂移检测）
-node scripts/audit.mjs style-profile --dir ~/papers/authored/ --out style.json
-
-# 5. 可选：期刊写作档案 + Journal Fit（section-level 契合度）
-node scripts/audit.mjs journal-profile --dir ~/papers/nature-comm-rep/ \
-  --journal "Nature Communications" --article-type research-article --out journal.json
-node scripts/audit.mjs audit --file paper_v2.tex --journal-profile journal.json --verbose
-
-# 6. 可选：交付物 CAL 检测（被否决方案是否泄漏到 commit/PR/release）
-node scripts/audit.mjs audit --text "Remove Toast from the login form" \
-  --baseline "export default function LoginForm() { ... }" \
-  --rejected-terms Toast
+# Restart
+dsh web
 ```
 
-`--json` 输出原始 report（severity / findingKind / confidence / 位置 / 依据）；
-`--fail-on-high` 让 HIGH 问题触发非零退出码（CI 友好）。
+### Natural Language Usage
 
-## 能力（对应插件 5 个工具）
+Once installed, you can use natural language:
 
-| CLI 子命令 | 插件工具 | 说明 |
-|---|---|---|
-| `audit` | `writing_audit` | 8 类规则审计 + Scholarship/Epistemic Lock + Journal Fit |
-| `rules` | `writing_rules` | 写作纪律速查 |
-| `style-profile` | `writing_style_profile` | 作者历史风格节奏指纹 JSON |
-| `journal-profile` | `writing_journal_profile` | 目标期刊写作档案 JSON |
-| `audit`（`--baseline`/`--rejected-terms`） | `writing_delivery_audit` | CAL 检测：被否决方案 / 修改残留 / 来源泄漏 |
+| Say this | Writing Guard does this |
+|----------|------------------------|
+| "帮我检查论文写作质量" | `writing_word_audit` |
+| "把表格改成三线表" | `writing_word_format_tables` |
+| "扫描DOCX结构" | `writing_word_scan` |
+| "修改第三章的XXX" | `writing_word_edit` |
+| "编辑后验证范围" | `writing_word_scope_check` |
+| "检查有没有AI味" | `writing_audit` |
 
-**优先级阶梯**：Scientific Invariant > Epistemic Safety > Delivery Cleanliness > Journal Requirement >
-Journal Norm > Journal Style——期刊风格永远不能覆盖科学完整性。
+---
 
-## 安全
+## Five Guards — Detailed
 
-- **零网络**：脚本不发起任何网络请求（引擎已验证无 `fetch`/`require`/`child_process`）。
-- **零依赖**：仅用 Node ≥18 内置模块（`node:fs/promises`、`node:path`）。
-- **只读**：CLI 只读输入文件，绝不改写稿件；`--out` 仅写用户指定的 JSON 输出。
-- 规则命中是**概率信号**，需人工复核；专业术语与正当 limitations 不因报警删改。
-- 确定性规则（正则 + 归一化）无法覆盖所有语义改写（semantic paraphrase），DELIVERY 层的检测范围是可用正则表达的泄漏模式，仍需人工 review。
+### STYLE — AI Writing Detection
 
-## 引擎出处
+Detects and reduces机械化、模板化、过度防御的 AI writing:
 
-`engine/rules.mjs` 编译自 [`dsh-plugin-writing-guard`](https://github.com/xmutfyh/dsh-plugin-writing-guard)
-v1.7.0（MIT）的 `src/rules.ts`（TypeScript → ESM，Node ≥18）。规则集、阈值、优先级与
-插件完全一致；插件仓库的 CHANGELOG 记录全部规则演进（v0.6 → v1.7.0）。
+- Revision residue: `revised`, `as requested`, `本轮`, `审稿人要求`
+- Defensive writing: concession stacking, limitation pre-emption
+- Mechanical rhetoric: `不是X而是Y`, `rather than` abuse, triple parallelism
+- LLM high-frequency words: `delve` / `tapestry` / `testament` (density-based)
+- Chinese patterns and average sentence length anomalies
+
+### EVIDENCE — Scholarship + Epistemic Lock
+
+Protects scientific facts during AI editing:
+
+- Numbers, percentages, p-values, confidence intervals, units
+- Citations, Figure/Table numbers, DOI
+- Causal strength: `associated with` cannot become `caused`
+- Null findings: `no significant difference` cannot disappear
+- Scope boundaries and evidence status
+
+### JOURNAL — Target Journal Fit
+
+Calibrates manuscript against target journal conventions:
+
+- Syntax structure (sentence length, paragraph length)
+- Voice and person (passive voice, first-person usage)
+- Citations (bibliographic, figure/table references)
+- Scientific claims (claim density, causal/evidential strength)
+- Rhetorical moves (coverage, canonical order)
+
+### DELIVERY — Context Leakage Detection
+
+Stops workflow context from leaking into final artifacts:
+
+- Rejected alternatives
+- Revision process residue
+- Provenance leakage
+- Defensive hedge leakage
+
+### DOCUMENT — Word Document Integrity 🆕
+
+Safely edit Word manuscripts without breaking structure:
+
+```
+writing_word_scan → writing_word_edit → writing_word_scope_check
+```
+
+**13 tools** for complete document integrity:
+
+| Tool | Purpose |
+|------|---------|
+| `writing_word_scan` | Structural scan |
+| `writing_word_edit` | Safe scoped editing |
+| `writing_word_audit` | Writing audit for .docx |
+| `writing_word_scope_check` | Scope integrity verification |
+| `writing_word_format_tables` | Three-line table formatting |
+| `writing_word_audit_equations` | OMML equation audit |
+| `writing_word_package_validate` | OOXML package validation |
+| `writing_word_fingerprint` | Baseline formatting fingerprint |
+| `writing_audit` | Text writing audit |
+| `writing_rules` | Writing guidelines |
+| `writing_style_profile` | Author style profile |
+| `writing_journal_profile` | Journal profile |
+| `writing_delivery_audit` | Delivery integrity audit |
+
+---
+
+## Installation
+
+```sh
+# From npm (recommended)
+dsh plugin add dsh-plugin-writing-guard
+
+# From GitHub
+dsh plugin add github:xmutfyh/dsh-plugin-writing-guard
+
+# From local source
+dsh plugin add ./path/to/dsh-plugin-writing-guard
+```
+
+**Prerequisites:**
+- Node.js ≥ 18
+- Python 3.10+ with `python-docx` (`pip install python-docx`)
+
+---
+
+## Architecture
+
+```
+Writing Guard
+├── STYLE (writing_audit)
+│   ├── Revision residue detection
+│   ├── AI style patterns
+│   └── Density-based thresholds
+├── EVIDENCE (Scholarship/Epistemic Lock)
+│   ├── Number/unit preservation
+│   ├── Citation integrity
+│   └── Claim strength conservation
+├── JOURNAL (Journal Profile)
+│   ├── Corpus-aware analysis
+│   ├── Section-level comparison
+│   └── Rhetorical move matching
+├── DELIVERY (CAL Detection)
+│   ├── Rejected alternative leakage
+│   ├── Process residue
+│   └── Baseline reality check
+└── DOCUMENT (Word Guard) 🆕
+    ├── Structural scanning
+    ├── Safe editing
+    ├── Package validation
+    ├── Fingerprinting
+    └── Equation audit
+```
+
+**Design principle:** Baseline manuscript > journal/template > plugin defaults.
+
+The LLM/agent decides *what* should change. Deterministic Word code decides *how* to make that change without silently altering unrelated formatting.
+
+---
+
+## Tests
+
+```sh
+npm test
+```
+
+380+ deterministic tests covering:
+- STYLE, Scholarship Lock, Epistemic Lock
+- Claim alignment, local citation integrity
+- Journal Profile, Journal Fit
+- DELIVERY (CAL detection)
+- **Word Guard** (v1.8.2): OOXML validation, fingerprinting, equation audit
+
+---
+
+## Security & Privacy
+
+- All rules run **locally**: zero network, zero LLM
+- Plugin only reads files being edited
+- No content collection or upload
+- See [SECURITY.md](SECURITY.md)
+
+---
+
+## Why Writing Guard?
+
+| | Writing Guard | Humanizer | AI Detector |
+|---|---|---|---|
+| Pre-writing rules | ✅ | ❌ | ❌ |
+| During-writing checks | ✅ | Usually ❌ | ❌ |
+| Auto-monitor manuscript | ✅ | ❌ | ❌ |
+| Full rewrite | ❌ | ✅ | ❌ |
+| Explainable issues | ✅ | Partial | Partial |
+| Local rules (zero LLM) | ✅ | Usually no | Depends |
+
+> Humanizer rewrites after writing. Writing Guard prevents during writing.
+
+---
+
+## Brand
+
+```
+                  WRITING GUARD
+                       │
+       Scientific Writing & Document Integrity
+                       │
+ ┌─────────┬──────────┬─────────┬──────────┬──────────┐
+ STYLE   EVIDENCE   JOURNAL   DELIVERY   DOCUMENT
+                                            │
+                               Change what was requested.
+                               Verify what wasn't.
+```
+
+**Classic slogan:** Less AI. More Evidence. Better Journal Fit. Clean Delivery.
+
+**Document slogan:** Change what was requested. Verify what wasn't.
+
+---
+
+## CHANGELOG
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-MIT — 见 [LICENSE](LICENSE)。规则集与引擎版权归原插件所有（MIT 授权再分发）。
+MIT
