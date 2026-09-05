@@ -4,22 +4,27 @@
 [![npm](https://img.shields.io/npm/v/dsh-plugin-writing-guard)](https://www.npmjs.com/package/dsh-plugin-writing-guard)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Scientific Writing & Document Integrity Guard for AI-assisted research
+## Argument Economy & Control-Plane Separation for AI-assisted Scientific Writing
 
 **Less AI. More Evidence. Better Journal Fit. Safer Documents.**
 
 Writing Guard is a local, deterministic guardrail for AI-assisted scientific writing.
+It repositions from "AI detector" toward **Argument Economy & Prose Discipline**:
+
+> Every sentence must earn its place. Critique is not content.
+> Prefer CUT over REWRITE. Do not close every semantic loop.
+
 It protects your manuscript across five layers:
 
 | Guard | Protects against | Risk |
 |-------|------------------|------|
-| **STYLE** | AI writing fingerprints | 机械排比、过度连接词、模板腔 |
+| **STYLE** | AI writing fingerprints + argument bloat | 机械排比、过度连接词、模板腔、defensive prose |
 | **EVIDENCE** | Scientific drift | 数值、单位、引用、结论被改 |
 | **JOURNAL** | Journal mismatch | scope/style/convention 不匹配 |
 | **DELIVERY** | Context leakage | prompt、notes、workflow metadata 泄漏 |
-| **DOCUMENT** 🆕 | Document corruption | Word 格式、公式、表格、OOXML 被破坏 |
+| **DOCUMENT** | Document corruption | Word 格式、公式、表格、OOXML 被破坏 |
 
-**Local · Deterministic · Zero Network · Zero LLM · 380+ Tests**
+**Local · Deterministic · Zero Network · Zero LLM · 394 Tests**
 
 ```
 npm install dsh-plugin-writing-guard
@@ -30,55 +35,59 @@ npm install dsh-plugin-writing-guard
 
 ---
 
-## 🛡️ New in 1.8 — Word Document Guard
+## What's New in v2.0 — Argument Economy
 
-**Change what was requested. Verify what wasn't.**
+**Critique is not content. Every sentence must earn its place.**
 
-AI-assisted document editing introduces a subtle risk: the requested text may improve while unrelated parts of the manuscript silently change.
+v2.0 repositions Writing Guard from "AI trace detector" to a **prose discipline engine** grounded in editorial principles:
 
-When you ask an AI agent to "rewrite paragraph 3 only," it may inadvertently modify:
+- **Nature Methods**: "every word should do useful work; readers bring intelligence and do not need incessant repetition."
+- **ICMJE**: discuss real limitations while avoiding detailed repetition and unsupported conclusions.
+- **Tack et al. (2024)**: "How to shorten manuscripts" — every sentence must earn its place.
 
-- equation structures
-- table borders
-- numbering
-- styles
-- section geometry
-- relationships
-- embedded media
-- OOXML package parts
+### New: Manuscript Writing Policy
 
-Writing Guard 1.8 introduces a **document-integrity layer** for Word manuscripts:
+The `rulesBrief()` function and `SKILL.md` now deliver a structured Manuscript Policy:
 
-| Feature | What it does |
-|---------|--------------|
-| **Safe scoped editing** | Only the specified range can change |
-| **Package validation** | Verifies DOCX/OOXML package integrity after editing |
-| **Structural fingerprinting** | Compares document structure before and after |
-| **Equation integrity** | Checks equation structure, numbering continuity, math-font drift |
-| **Scholarly table awareness** | Distinguishes data tables from layout/figure containers |
-| **Pre/post integrity verification** | Deterministic verification, not "I think it's fine" |
+| Policy | Core rule |
+|--------|-----------|
+| **Control context ≠ content** | Reviewer comments, guard findings, and remediation suggestions are not manuscript evidence |
+| **Argument economy** | Every sentence must earn its place; prefer CUT over REWRITE |
+| **Do not close every semantic loop** | State claims once; stop after evidence and calibrated interpretation |
+| **Clarity ≠ exhaustive explanation** | Explicit referents ≠ spelling out every implication |
+| **Defensive-purpose test** | Prebuttals, disclaimers, and "therefore this is important" are candidates for removal |
+| **Style-only expansion discipline** | Polishing defaults to same length or shorter |
+| **Minimal edit protocol** | CUT → PRUNE → RECAST → SPLIT; do not split unless genuinely multiple claims |
+| **Scientific invariants** | Never silently alter numbers, units, statistics, citations, negation, or scope |
 
-### Before / After
+### New: EditAction remediation semantics
 
-**Without Writing Guard:**
-```
-"Please improve the wording in paragraph 3."
-→ AI agent modifies DOCX.
-→ Result: paragraph looks better.
-→ Unknown: what else changed?
-```
+Every finding now carries an `EditAction`:
 
-**With Writing Guard:**
-```
-"Please improve the wording in paragraph 3."
-→ Writing Guard:
-   ✓ scope validated
-   ✓ package valid
-   ✓ equations preserved
-   ✓ protected structures unchanged
-   ✓ document fingerprint checked
-→ Result: paragraph changed — and unintended document drift is detected.
-```
+| Action | Meaning |
+|--------|---------|
+| **KEEP** | Defensive purpose is justified; preserve as-is |
+| **CUT** | Remove the sentence; no replacement needed |
+| **TIGHTEN** | Shorten by removing hedging/defense while keeping the claim |
+| **REFRAME_TO_FACT** | Convert defensive framing into a direct factual statement |
+| **RELOCATE** | Move to Discussion/Limitations where it belongs |
+| **QUERY** | Insufficient information to decide; ask the author |
+
+### New: Deterministic candidate cues
+
+Three new rule groups detect semantic patterns that are **candidates**, not banned phrases:
+
+- **Defensive-purpose framing** (en/zh): reviewer prebuttals, disclaimers, reassurance
+- **Semantic-closure markers** (en/zh): "In other words", "Taken together", "综上所述"
+- **Content-free evaluation** (en/zh): "This is important", "These results are significant"
+
+### Retained from v1.x
+
+- **Scholarship Lock**: numbers, citations, Figure/Table references preserved
+- **Epistemic Lock**: causal strength, null findings, scope boundaries preserved
+- **Journal Engine**: corpus-aware Journal Fit
+- **Delivery Guard**: CAL (Context-to-Artifact Leakage) detection
+- **Word Guard**: DOCX safe editing, OOXML validation, fingerprinting, equation audit
 
 ---
 
@@ -109,12 +118,16 @@ Once installed, you can use natural language:
 
 ## Five Guards — Detailed
 
-### STYLE — AI Writing Detection
+### STYLE — Argument Economy & AI Writing Detection
 
-Detects and reduces机械化、模板化、过度防御的 AI writing:
+v2.0 repositions from "AI detector" toward **argument economy**. Deterministic rules remain local; semantic writing decisions are delegated to the host model through `rulesBrief()` and `SKILL.md`.
+
+Deterministic checks include:
 
 - Revision residue: `revised`, `as requested`, `本轮`, `审稿人要求`
-- Defensive writing: concession stacking, limitation pre-emption
+- Defensive-purpose framing: reviewer prebuttals, disclaimers, reassurance
+- Semantic-closure markers: `In other words`, `Taken together`, `综上所述`
+- Content-free evaluation: `This is important`, `These results are significant`
 - Mechanical rhetoric: `不是X而是Y`, `rather than` abuse, triple parallelism
 - LLM high-frequency words: `delve` / `tapestry` / `testament` (density-based)
 - Chinese patterns and average sentence length anomalies
@@ -148,7 +161,7 @@ Stops workflow context from leaking into final artifacts:
 - Provenance leakage
 - Defensive hedge leakage
 
-### DOCUMENT — Word Document Integrity 🆕
+### DOCUMENT — Word Document Integrity
 
 Safely edit Word manuscripts without breaking structure:
 
@@ -199,7 +212,9 @@ dsh plugin add ./path/to/dsh-plugin-writing-guard
 
 ```
 Writing Guard
-├── STYLE (writing_audit)
+├── STYLE (Argument Economy + writing_audit)
+│   ├── Manuscript Writing Policy (SKILL.md)
+│   ├── Deterministic candidate cues
 │   ├── Revision residue detection
 │   ├── AI style patterns
 │   └── Density-based thresholds
@@ -215,7 +230,7 @@ Writing Guard
 │   ├── Rejected alternative leakage
 │   ├── Process residue
 │   └── Baseline reality check
-└── DOCUMENT (Word Guard) 🆕
+└── DOCUMENT (Word Guard)
     ├── Structural scanning
     ├── Safe editing
     ├── Package validation
@@ -224,6 +239,8 @@ Writing Guard
 ```
 
 **Design principle:** Baseline manuscript > journal/template > plugin defaults.
+
+Deterministic rules handle STYLE/EVIDENCE/DELIVERY. Semantic writing decisions (argument economy, defensive-purpose test, clarity calibration) are delegated to the host model through `rulesBrief()` and `SKILL.md`.
 
 The LLM/agent decides *what* should change. Deterministic Word code decides *how* to make that change without silently altering unrelated formatting.
 
@@ -235,12 +252,13 @@ The LLM/agent decides *what* should change. Deterministic Word code decides *how
 npm test
 ```
 
-380+ deterministic tests covering:
-- STYLE, Scholarship Lock, Epistemic Lock
+394 deterministic tests covering:
+- STYLE, Argument Economy, Defensive-Purpose Detection
+- Scholarship Lock, Epistemic Lock
 - Claim alignment, local citation integrity
 - Journal Profile, Journal Fit
 - DELIVERY (CAL detection)
-- **Word Guard** (v1.8.2): OOXML validation, fingerprinting, equation audit
+- Word Guard: OOXML validation, fingerprinting, equation audit
 
 ---
 
@@ -273,18 +291,17 @@ npm test
 ```
                   WRITING GUARD
                        │
-       Scientific Writing & Document Integrity
+       Argument Economy & Control-Plane Separation
                        │
  ┌─────────┬──────────┬─────────┬──────────┬──────────┐
  STYLE   EVIDENCE   JOURNAL   DELIVERY   DOCUMENT
-                                            │
-                               Change what was requested.
-                               Verify what wasn't.
+    │
+ Every sentence must earn its place.
+ Critique is not content.
+ Prefer CUT over REWRITE.
 ```
 
-**Classic slogan:** Less AI. More Evidence. Better Journal Fit. Clean Delivery.
-
-**Document slogan:** Change what was requested. Verify what wasn't.
+**Slogan:** Less AI. More Evidence. Better Journal Fit. Clean Delivery.
 
 ---
 

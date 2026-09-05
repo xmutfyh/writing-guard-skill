@@ -38,7 +38,7 @@ const before = path.join(here, 'sample-before.txt')
 const after = path.join(here, 'sample-after.txt')
 
 // rules
-await check('rules subcommand', ['rules'], (r) => r.code === 0 && r.out.includes('v1.6.2'))
+await check('rules subcommand', ['rules'], (r) => r.code === 0 && r.out.includes('Manuscript Policy'))
 
 // audit style (manuscript) — expect process-residue HIGH
 await check('audit style (manuscript) → residue HIGH',

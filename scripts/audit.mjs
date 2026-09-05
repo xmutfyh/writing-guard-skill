@@ -2,8 +2,8 @@
 /**
  * writing-guard-skill CLI — 本地写作纪律审计（零网络 · 零 LLM · 零依赖）。
  *
- * 引擎 = engine/rules.mjs（由 dsh-plugin-writing-guard v1.6.2 的 src/rules.ts
- * 编译而来，MIT）。
+ * 引擎 = engine/rules.mjs（由 dsh-plugin-writing-guard v2.0.1 的 src/rules.ts
+ * 编译而来，MIT）。Argument Economy & Control-Plane Separation。
  *
  * 子命令：
  *   audit            审计文本或文件（STYLE + Scholarship/Epistemic Lock + Journal Fit）

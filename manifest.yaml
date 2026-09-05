@@ -1,6 +1,6 @@
 name: writing-guard
-version: 1.8.0
-description: 论文写作纪律检查与 Word 文档安全编辑
+version: 2.0.1
+description: 论文写作纪律检查与 Word 文档安全编辑 — Argument Economy & Control-Plane Separation
 author: Yuanhao Feng
 tags:
   - writing
@@ -11,6 +11,7 @@ tags:
   - rebuttal
   - proofreading
   - ai-detection
+  - argument-economy
 tools:
   - writing_audit
   - writing_word_scan
@@ -19,6 +20,8 @@ tools:
   - writing_word_scope_check
   - writing_word_format_tables
   - writing_word_audit_equations
+  - writing_word_package_validate
+  - writing_word_fingerprint
   - writing_rules
   - writing_style_profile
   - writing_journal_profile

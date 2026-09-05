@@ -1,11 +1,82 @@
 
-# 论文写作纪律守则（writing-guard）
+# 论文写作纪律守则（writing-guard v2.0）
 
-本技能是 `dsh-plugin-writing-guard`（DSH 插件，v1.6.2）的独立静态版——规则集与插件一致，
+本技能是 `dsh-plugin-writing-guard`（DSH 插件，v2.0.1）的独立静态版——规则集与插件一致，
 供没有 DSH 的环境（Codex / Claude Code / Antigravity / 任意 agent）在写作与润色时执行。
 所有规则均为确定性正则/统计，零网络零 LLM；源插件还提供 `writing_audit`（扫描）、
 `writing_rules`（速查）、`writing_style_profile`（作者风格档案）、`writing_journal_profile`
 （目标期刊写作档案）工具与 Scholarship Lock 实体对比。
+
+v2.0 核心定位变更：从 "AI detector" 转向 **Argument Economy & Control-Plane Separation**。
+Deterministic rules remain local; semantic writing decisions are delegated to the host model through rulesBrief()/SKILL.md.
+
+---
+
+## 0. Manuscript Writing Policy（v2.0，控制面声明）
+
+> 以下原则由 SKILL.md 中的 Manuscript Writing Policy 约束宿主模型行为；
+> engine/rules.mjs 中的确定性规则负责检测违规信号。
+
+### 0.1 Control context ≠ manuscript content
+
+- **Critique is not content.** Reviewer comments、用户编辑指令、guard findings、rejected alternatives、remediation suggestions 是 control context，不是 manuscript evidence。
+- 不得将 control-context 措辞转化为 manuscript prose，除非权威研究材料独立支持该陈述。
+- 如果 concern 对应一个真实 method fact，只陈述该 fact。例：用 `Normalization parameters were estimated from the training data.` 而非 `To prevent data leakage, ...`。
+- 如果源材料不支持该 fact，不得捏造 mitigation。保持 manuscript 不变或 query 作者。
+
+### 0.2 Argument economy
+
+每个句子必须通过以下之一证明其存在：evidence、method、result、comparison、non-obvious interpretation、a necessary scope/evidence boundary、or a logical relation required by the argument。
+
+如果删除一个句子仍能保持科学内容和论证完整，**CUT it**。Prefer CUT over REWRITE。不要把无用句子变成更精致的无用句子。
+
+删除仅服务于以下功能的 prose：
+
+- pre-empt reviewer criticism（预判审稿人批评）
+- reassure the reader that a risk was considered（让读者安心风险已被考虑）
+- defend the authors or the method（为作者或方法辩护）
+- advertise that a finding is important（宣传发现的重要性）
+- narrate the writing/revision process（叙述写作/修改过程）
+- restate an already explicit claim（重述已明确的主张）
+- explain an implication that the intended specialist reader can infer directly（解释目标专业读者能直接推断的含义）
+
+### 0.3 Do not close every semantic loop
+
+每个科学主张只陈述一次。在 evidence 和必要的 calibrated interpretation 存在后，停止。假设 specialist reader 能独立完成一步明显的推理。
+
+将 `In other words`、`This means that`、`Taken together`、以及等效中文总结标记视为 **candidates**，而非 banned phrases。仅在下一句添加 mechanism、comparison、quantitative interpretation、condition、citation 或 necessary boundary 时保留。
+
+独立评价如 `This is an important finding.` 应删除，除非其立即指定 concrete consequence。
+
+### 0.4 Clarity ≠ exhaustive explanation
+
+Clarity 意味着 explicit referents、readable syntax、sufficient reproducibility detail、以及解释 evidence 所需的 reasoning。它 **不** 意味着阐述每个 implication。
+
+不要仅为了简洁而删除定义、non-obvious statistical interpretation、necessary method detail 或 genuine epistemic boundaries。翻译 difficult metric 为 useful meaning 的句子可保留；仅 paraphrase 已明确主张的句子应删除。
+
+### 0.5 Defensive-purpose test
+
+将 reviewer-facing prebuttals、repeated non-claim disclaimers、omitted-experiment defenses、result excuses、legalistic reassurance、以及 automatic "therefore this is important" summaries 视为 removal or relocation 的 candidates。
+
+对于任何此类句子，按顺序问：
+
+1. 它是否改变了 method、validity、scope、evidence strength 或 interpretation 的 scientifically necessary understanding？如果是 **no**，CUT。
+2. 底层 fact 是否由 authoritative research material 独立支持？如果是 **yes**，直接且最小化地陈述该 fact；如果是 **no**，QUERY 而非捏造。
+3. 该内容是否为 real limitation or alternative explanation？如果是 **yes**，在 appropriate section 保留科学内容，但移除 reviewer-facing motive 和 repeated reassurance。
+
+### 0.6 Style-only expansion discipline
+
+当用户只要求 polishing、rewriting 或 style improvement 且不提供新 scientific content 时，默认 **same length or shorter**。Expansion 仅在 resolve real ambiguity、preserve reproducibility 或 state a necessary scientific boundary 时才有正当理由。
+
+### 0.7 Minimal edit protocol
+
+使用 **CUT → PRUNE → RECAST → SPLIT**。不要自动将一个 difficult sentence 拆成两个或三个 explanatory sentences。仅在 original 真正包含多个 independent scientific claims 时 split。
+
+对于 defensive prose，**写 scientific fact，而非你 defensively 提及该 fact 的原因**。
+
+### 0.8 Scientific invariants
+
+Never silently alter numbers, units, statistics, citations, Figure/Table references, negation, null findings, causal strength, evidential strength, evidence status, population, condition, or scope for style. If a better sentence requires unsupported science, **QUERY**.
 
 ---
 
@@ -75,11 +146,11 @@
 - 纪律边界（ESR）：不得为了"学术自信"删除真实的证据缺口、失效模式、条件限制——
   局限是证据透明度的一部分，只改措辞不改事实。
 
-## 7. 科学完整性锁（v0.8/v0.9，Epistemic Lock——Scholarship Lock 2.0）
+## 7. 科学完整性锁（Epistemic Lock——Scholarship Lock 2.0）
 
 > 数字没变 ≠ 没改坏。语言润色不得改变 science——无论往强还是往弱。
 
-- **双轴主张模型（v0.9）**（改编自 Yila-AI/sci-ssci-skills，Apache-2.0，见 THIRD_PARTY.md）：
+- **双轴主张模型**（改编自 Yila-AI/sci-ssci-skills，Apache-2.0，见 THIRD_PARTY.md）：
   - **因果力**：`consistent with`(0) < `is associated with`(1) < `predicts`(2) < `contributes to`(3)
     < `affects / leads to / reduces`(4) < `causes`(5)；
   - **证据力**：hedge（may/might/could，-1）< `suggest`(1) < `indicate`(2) < `support`(3) <
@@ -87,10 +158,10 @@
   - 两轴独立检测："confirmed an association" = 因果力关联 + 证据力强，不是因果 L5；
     "was associated with" → "caused" 是因果力漂移；"suggested" → "confirmed" 是证据力漂移；
     "may be associated" → "is associated"（hedge 移除）也是证据力变化。
-- **子句级多主张（v0.9）**：按 `; , while whereas although but and` 切分子句逐子句对齐——
+- **子句级多主张**：按 `; , while whereas although but and` 切分子句逐子句对齐——
   "X caused A, while Y may be associated with B" → "Y caused B" 必须检出（Y 的关联→因果），
   整句最高层掩盖不了局部漂移。`between/among X and Y` 枚举中的 and 不切分。
-- **对齐相似度分档（v0.9）**：≥0.70 → high/invariant；0.55–0.70 → medium/invariant；
+- **对齐相似度分档**：≥0.70 → high/invariant；0.55–0.70 → medium/invariant；
   0.45–0.55 → low/CANDIDATE（提示人工复核）；整句重写（低于对齐阈值）不产生假漂移。
 - **否定守恒**：`No significant association` → `A significant association` 会翻转阴性/零结果。
   no / not / did not / without / non-significant 标记被删除即 HIGH；凭空引入否定也需核对。
@@ -98,11 +169,11 @@
   不得因削弱叙事而删除（负面、零、矛盾结果是 Evidence-Bound 的 KEEP 类）。
 - **scope 边界**：`in this study` / `under these conditions` / `在本研究中` / `内部验证` 等标记
   从同一句中消失 → 核验主张是否被泛化（不自动判错）。
-- **证据状态守恒（v1.0）**：reported/observed/measured/implemented/estimated/simulated 等来源
+- **证据状态守恒**：reported/observed/measured/implemented/estimated/simulated 等来源
   状态词消失或被替换 → 核验："participants reported improvement" 不能变成 "participants
   improved"（报告≠事实）；"observed rate" → "estimated rate" 是状态替换（观测≠模拟/估算），
   同样改变读者对证据来源的理解——不自动判错，恢复状态词或显式说明状态改变。
-- **claim-bound 守恒（v1.1）**：否定/零结果/scope/证据状态**绑定到所属子句**逐句配对比较——
+- **claim-bound 守恒**：否定/零结果/scope/证据状态**绑定到所属子句**逐句配对比较——
   "X did not improve, but Y improved" → "X improved, but Y did not improve" 这种标记交换
   （句子级数量完全相同）必须检出；marker 大小写/英美拼写（modelled↔modeled）不视为变化；
   scope 边界新增（一般陈述→受限陈述）提示可能缩窄外部有效性；同一主张的因果力/证据力/
@@ -114,39 +185,40 @@
     可能承担正当的 claim 边界（scope/证据状态/因果边界/竞争解释），处置为
     KEEP / TIGHTEN / REFRAME / RELOCATE / CUT / QUERY，不确定就 QUERY，不要自动删除；
   - `ADVISORY`（纯文体：长句/密度/格式）——可保留并说明理由。
+- **v2.0 EditAction**：每个 finding 携带 remediation 语义：
+  KEEP / CUT / TIGHTEN / REFRAME_TO_FACT / RELOCATE / QUERY。
 
-## 7.5 期刊写作契合（v1.4 Journal Engine）
+## 8. 期刊写作契合（Journal Engine）
 
 - 目标不是"模仿 Nature 风格"，而是从目标期刊 author guidelines + 代表论文中提取可复用的
   统计规律（Journal Writing Profile）：句长/段长/hedge 密度/因果力/证据力/第一人称/被动语态/
   引用密度分布。
 - 用 `writing_journal_profile` 从代表论文生成 profile；用 `writing_audit(journalProfile=JSON)`
   对当前稿件做 section-level Journal Fit（每个章节契合度百分比 + 主要差异 + 目标 P10-P90）。
-- v1.4.1：多篇论文必须用 `computeJournalProfileFromDocuments` / `writing_journal_profile(learnDir=...)`
+- 多篇论文必须用 `computeJournalProfileFromDocuments` / `writing_journal_profile(learnDir=...)`
   按篇独立解析后再跨论文聚合；同章节指标全部为 Distribution（含 `articleCount`）。
-- v1.4.2：比例型指标（第一人称/被动语态）评分使用 `minSpread=0.05`；引用密度拆分为
+- 比例型指标（第一人称/被动语态）评分使用 `minSpread=0.05`；引用密度拆分为
   文献引用与图表引用；Journal Fit 报告带 `confidence` 与 `corpusSize`。
-- v1.5.0：Journal Engine 复用 `extractClaimSpans` 生成 epistemic fingerprint——
-  `claimCount` / `highCausalRatio` / `hedgedClaimRatio` / `strongEvidentialRatio` /
-  `scopeQualifiedRatio` / `nullFindingRatio` 均进入 Journal Fit。
-- v1.6.0：Rhetorical Moves——`detectRhetoricalMoves` 提取 Introduction/Discussion/Results/Methods
-  move 序列；Journal Profile 含 `sectionMoves` 与 `transitions`；Journal Fit 比较
-  `rhetorical move coverage` 与 `rhetorical order fit`。
-- v1.6.1：Semantic Hardening——Journal Fit 使用 `claimDensity`；`ClaimSpan.spanKind`
-  区分 claim/procedural/descriptive/unknown；移除旧 regex epistemic 重复计权；
-  `Results and Discussion` 独立为 `results_discussion`。
-- v1.6.2：Rhetorical Semantics Hardening——修复中文 rhetorical regex 的 `` 边界；
-  rhetorical order 改用 medoid sequence；transitions 改为 section-bound；
-  `results_discussion` 支持 Results + Discussion 双 move；新增 `spanDensity` / `recognizedClaimDensity`；
-  Journal Fit 按分组权重（句法/语态/引用/科学主张/修辞）计算。
+- Journal Engine 复用 `extractClaimSpans` 生成 epistemic fingerprint。
 - 优先级：Scientific Invariant > Epistemic Safety > Journal Requirement > Journal Norm >
-  Journal Style——期刊风格永远不能覆盖科学完整性；原文只支持 "associated with" 时，
-  任何 Journal Profile 都不能推动改成 "caused"。
+  Journal Style——期刊风格永远不能覆盖科学完整性。
 
-## 8. 发布原则与提交前自查
+## 9. 交付完整性（Delivery Guard / CAL Detection）
 
-- 只围绕优势组织论文；不写工作汇报、不主动示弱、不替审稿人攻击自己；
-  打不过的维度不设为比赛项目；优势必须明确说出来。
+检测工作上下文中的被否决方案、临时尝试、纠错过程是否泄漏到最终交付物：
+
+- **REJECTED_ALTERNATIVE_LEAKAGE**：被否决术语泄漏（如 commit message 中引用已删除的 Toast 组件）
+- **REVISION_PROCESS_LEAKAGE**：修改过程残留（如 "Remove X" 但 X 不在 baseline 中）
+- **PROVENANCE_LEAKAGE**：来源泄漏（如 commit message 中提到 Claude/GPT）
+- **UNJUSTIFIED_NEGATIVE_REFERENCE**：无依据否定引用
+- **DELIVERY_CANDIDATE**：无法验证的删除/替换声明
+
+可传入 baseline（权威基线内容）做基线真实性检查。
+
+---
+
+## 10. 提交前自查
+
 - 润色/改写后自查：① 数字、百分数、p 值、置信区间、\cite/\ref、Figure/Table 编号、DOI
   是否被改动（语言润色不得改变科研事实——Scholarship Lock）；② 主张强度是否沿阶梯漂移、
   否定/零结果是否被翻转、scope 边界是否消失（Epistemic Lock）；③ 高危项清零、中危 ≤3 处；
@@ -157,5 +229,8 @@
 
 ---
 
-*本守则来源于 dsh-plugin-writing-guard v1.6.2（MIT）。检测类规则为概率信号：命中即人工复核，
+*本守则来源于 dsh-plugin-writing-guard v2.0.1（MIT）。检测类规则为概率信号：命中即人工复核，
 专业术语与正当 limitations 不因规则报警而删改。*
+
+*v2.0 核心定位：Argument Economy & Control-Plane Separation。*
+*Every sentence must earn its place. Critique is not content. Prefer CUT over REWRITE.*

@@ -15,15 +15,15 @@
  *
  * Rule sources (see 09_wiki/writing/写作纪律_防AI痕迹与防御性写作.md):
  *  - Reviewer-shared AI-writing-tell list (OCR of two JPGs)
- *  - 扬长避短提示词 (no self-deprecation, no reviewer bait)
+ *  - Argument economy (no reviewer bait, no defensive motive, no semantic over-closure)
  *  - ESR guide (no revision-process residue, boundaries stated once)
  *  - Kobak et al., Science Advances (2025; >15M biomedical abstracts) for
  *    LLM-associated vocabulary spikes; community word lists.
  *
- * All rules are local regex/statistics — zero network, zero LLM calls.
+ * Deterministic rules remain local; semantic writing decisions are delegated to the host model through rulesBrief()/SKILL.md.
  */
 /** 插件版本（单点定义：state 标记、工具描述、规则速查共用，避免多处硬编码漂移） */
-export const PLUGIN_VERSION = '1.7.0';
+export const PLUGIN_VERSION = '2.0.1';
 /** 语言适应的词/字计数（v0.3.1：不要用英文 whitespace-word 衡量中文） */
 export function countLexicalUnits(text) {
     // 中文字符单独计数（无空格），其余按空白切词
@@ -1450,6 +1450,17 @@ export function resolveFindingKind(rule) {
     }
     return rule.category === 'claim_calibration' ? 'candidate' : 'advisory';
 }
+export function resolveEditAction(hit, rule) {
+    if (rule?.defaultAction)
+        return rule.defaultAction;
+    if (hit.findingKind === 'invariant')
+        return 'QUERY';
+    if (hit.findingKind === 'violation')
+        return 'CUT';
+    if (hit.findingKind === 'candidate')
+        return 'TIGHTEN';
+    return 'KEEP';
+}
 export const CATEGORY_LABELS = {
     process_residue: '修改过程残留',
     claim_calibration: '主张校准',
@@ -1545,6 +1556,106 @@ const RULES = [
         evidence: { type: 'style-guide', source: 'ESR 指南：稿件层级污染' },
     },
     // ================= claim_calibration 主张校准（防御性写作） =================
+    {
+        id: 'defensive-purpose-en',
+        category: 'claim_calibration',
+        severity: 'high',
+        confidence: 'medium',
+        label: 'Defensive-purpose framing',
+        pattern: /\b(?:to|in order to)\s+(?:avoid|prevent|preclude|address|allay|minimi[sz]e)\s+(?:potential\s+)?(?:concerns?|criticism|misunderstandings?|confusion|questions?|doubts?|objections?|data leakage|information leakage)\b/gi,
+        message: 'The sentence foregrounds why the author is defending against a possible objection rather than the scientific fact itself.',
+        suggestion: 'Remove the defensive motive. If the source material independently supports a relevant method or scope fact, state only that fact. Otherwise CUT or QUERY; do not invent a mitigation.',
+        maxHits: 4,
+        profiles: ['manuscript', 'unknown'],
+        languages: ['en'],
+        evidence: { type: 'style-guide', source: 'Argument economy; reviewer-facing prebuttal taxonomy' },
+        findingKind: 'candidate',
+        defaultAction: 'REFRAME_TO_FACT',
+        note: 'Critique is not content. A concern raised in revision is control context, not manuscript evidence.',
+    },
+    {
+        id: 'defensive-purpose-zh',
+        category: 'claim_calibration',
+        severity: 'high',
+        confidence: 'medium',
+        label: 'Defensive-purpose framing (ZH)',
+        pattern: /(?:为了?|以)(?:避免|防止|消除|回应|打消)(?:潜在)?(?:质疑|误解|忧虑|担忧|争议|数据泄漏|信息泄漏)/g,
+        message: 'The sentence foregrounds a defensive motive instead of the scientific fact.',
+        suggestion: 'Remove the defensive motive and retain only an independently supported method/scope fact. If no such fact exists in the source material, CUT or QUERY rather than inventing one.',
+        maxHits: 4,
+        profiles: ['manuscript', 'unknown'],
+        languages: ['zh'],
+        evidence: { type: 'style-guide', source: 'Argument economy; reviewer-facing prebuttal taxonomy' },
+        findingKind: 'candidate',
+        defaultAction: 'REFRAME_TO_FACT',
+        note: 'Control-context concerns must not be converted into manuscript prose.',
+    },
+    {
+        id: 'semantic-closure-marker-en',
+        category: 'academic_style',
+        severity: 'low',
+        confidence: 'low',
+        label: 'Possible semantic-closure sentence',
+        pattern: /\b(?:in other words|put differently|to put it another way|simply put|this means that|taken together|these findings (?:highlight|underscore)|this finding (?:highlights|underscores))\b/gi,
+        message: 'This marker often introduces a second sentence that repackages an already explicit claim.',
+        suggestion: 'Check information gain. If the sentence adds no mechanism, comparison, quantitative interpretation, condition, citation, or necessary boundary, CUT it. A specialist reader can make one obvious inference unaided.',
+        maxHits: 5,
+        profiles: ['manuscript', 'unknown'],
+        languages: ['en'],
+        evidence: { type: 'style-guide', source: 'Paraphrastic repetition / argument economy' },
+        findingKind: 'candidate',
+        defaultAction: 'TIGHTEN',
+        note: 'Not a banned-phrase rule: genuine technical or quantitative clarification may be useful.',
+    },
+    {
+        id: 'semantic-closure-marker-zh',
+        category: 'academic_style',
+        severity: 'low',
+        confidence: 'low',
+        label: 'Possible semantic-closure sentence (ZH)',
+        pattern: /(?:换言之|也就是说|换句话说|这意味着|由此可见|这进一步说明|综上)/g,
+        message: 'This marker often introduces an unnecessary restatement or paragraph-closing explanation.',
+        suggestion: 'Check information gain. If no new mechanism, comparison, quantitative interpretation, condition, citation, or necessary boundary is added, CUT it.',
+        maxHits: 5,
+        profiles: ['manuscript', 'unknown'],
+        languages: ['zh'],
+        evidence: { type: 'style-guide', source: 'Paraphrastic repetition / argument economy' },
+        findingKind: 'candidate',
+        defaultAction: 'TIGHTEN',
+        note: 'Not a banned-phrase rule; retain real clarification.',
+    },
+    {
+        id: 'content-free-evaluation-en',
+        category: 'academic_style',
+        severity: 'low',
+        confidence: 'medium',
+        label: 'Content-free evaluation',
+        pattern: /\b(?:(?:this|the) (?:finding|result|observation) (?:is (?:important|significant|noteworthy|meaningful|clinically relevant)|has important implications)|these (?:findings|results|observations) (?:are (?:important|significant|noteworthy|meaningful|clinically relevant)|have important implications)|this is an? (?:important|significant|noteworthy|meaningful|clinically relevant) (?:finding|result|observation)|these are (?:important|significant|noteworthy|meaningful|clinically relevant) (?:findings|results|observations))\b/gi,
+        message: 'The sentence labels a result as important or meaningful without itself adding scientific information.',
+        suggestion: 'CUT the standalone evaluation. Keep an implication only when it names a concrete mechanism, consequence, comparison, decision, or boundary.',
+        maxHits: 4,
+        profiles: ['manuscript', 'unknown'],
+        languages: ['en'],
+        evidence: { type: 'style-guide', source: 'Argument economy / content-free evaluation' },
+        findingKind: 'advisory',
+        defaultAction: 'CUT',
+    },
+    {
+        id: 'content-free-evaluation-zh',
+        category: 'academic_style',
+        severity: 'low',
+        confidence: 'medium',
+        label: 'Content-free evaluation (ZH)',
+        pattern: /(?:这|该)(?:一)?(?:发现|结果|观察)(?:具有|有)(?:重要|显著|值得注意|重大)(?:意义|价值|启示)/g,
+        message: 'The sentence evaluates importance without adding a concrete scientific consequence.',
+        suggestion: 'CUT the standalone evaluation unless it immediately specifies a concrete mechanism, consequence, comparison, decision, or boundary.',
+        maxHits: 4,
+        profiles: ['manuscript', 'unknown'],
+        languages: ['zh'],
+        evidence: { type: 'style-guide', source: 'Argument economy / content-free evaluation' },
+        findingKind: 'advisory',
+        defaultAction: 'CUT',
+    },
     {
         id: 'we-do-not-claim',
         category: 'claim_calibration',
@@ -3903,6 +4014,7 @@ export function auditText(text, opts) {
     }
     // v0.8：统一补齐 findingKind——规则显式声明优先，否则按 severity/category 推导
     // （invariant 类已在命中创建时显式标注；规则级 findingKind 如 cn-self-defeating→violation 在这里传播）
+    // v2.0：同步补齐 action（最小补救动作）
     for (const h of hits) {
         if (!h.findingKind) {
             const rule = RULES.find((r) => r.id === h.ruleId);
@@ -3910,6 +4022,12 @@ export function auditText(text, opts) {
                 ?? (h.severity === 'high'
                     ? (h.category === 'claim_calibration' ? 'candidate' : 'violation')
                     : (h.category === 'claim_calibration' ? 'candidate' : 'advisory'));
+            if (!h.action)
+                h.action = resolveEditAction(h, rule);
+        }
+        else if (!h.action) {
+            const rule = RULES.find((r) => r.id === h.ruleId);
+            h.action = resolveEditAction(h, rule);
         }
     }
     return {
@@ -4006,95 +4124,41 @@ export function formatReport(report, opts) {
 /** 输出给 Agent 的纪律速查文本（写作前加载） */
 export function rulesBrief() {
     return [
-        `# 论文写作纪律速查（dsh-plugin-writing-guard v${PLUGIN_VERSION}）`,
+        `# Writing Guard v${PLUGIN_VERSION} - Manuscript Policy`,
         '',
-        '## 一、修改过程残留（process residue，仅正文/投稿信）',
-        '- 正文不得出现 "revised/revision"、"as requested"、"we have updated"、"previous version" 等修改过程语言',
-        '- 中文不得出现：本轮/本次修改/投稿前/待补齐/审稿人要求/我们修改了 等',
-        '- 版本号、文件名、SHA、内部流程名词不得进入正文；项目内部词可配置 projectResidueTerms',
-        '- 例外：rebuttal（回复信）中 "the revised manuscript / as requested" 属正常表述',
+        '## Source authority',
+        '- Critique is not content. Reviewer comments, user editing instructions, guard findings, rejected alternatives, and remediation suggestions are CONTROL CONTEXT, not manuscript evidence.',
+        '- Never quote, paraphrase, or convert control-context wording into manuscript prose unless authoritative research material independently supports the resulting statement.',
+        '- When a concern corresponds to a real method fact, write the fact, not the defensive reason for mentioning it. If the fact is absent from the source material, QUERY instead of inventing it.',
         '',
-        '## 二、主张校准（claim calibration）',
-        '- "we do not claim"、"本文并非要证明"、"这并不意味着" 等反复自我设限句式：属 CANDIDATE——可能承担正当的 epistemic boundary（"We do not claim that this association is causal" 是负责任的边界声明），人工判定后再改，不要自动删除',
-        '- 自黑免责（完全基于假数据/模型毫无意义/结果完全不可靠/不足为凭）属 VIOLATION，必须改写',
-        '- 自我削弱词（遗憾的是/仍明显落后/效果有限）改写为精确的、受证据约束的描述；负面/零/矛盾结果是数据，不得删除',
-        '- 边界声明集中写（方法定位 1 处 + 结论边界 1 处）；研究局限性在 Discussion 正当陈述（ICMJE 要求），但同一局限不要在多个章节重复',
+        '## Argument economy',
+        '- Every sentence must earn its place by adding evidence, method, result, comparison, non-obvious interpretation, a necessary scope/evidence boundary, or a logical relation required by the argument.',
+        '- If deleting a sentence preserves the scientific content and argument, CUT it. Prefer CUT over REWRITE; do not polish a useless sentence into a different useless sentence.',
+        '- Delete prose whose only function is to pre-empt criticism, reassure reviewers, defend the authors, advertise importance, narrate the writing process, or restate an already explicit claim.',
         '',
-        '## 三、修辞模式（rhetorical pattern）',
-        '- “不是X而是Y”/“not X but Y”对仗句式尽量删除，换数字、动作、场景',
-        '- “rather than”按密度控制：全文 ≥4 次且 ≥1.0/千词时逐句复核；概念澄清可保留',
-        '- 绝对化定义（唯…才…/其核心在于/其本质在于）改为有条件的命题',
-        '- 三连排比（X, Y, and Z）全文 ≥4 处且 ≥0.8/千词时精简',
+        '## Do not close every semantic loop',
+        '- State each scientific claim once. After evidence plus the necessary calibrated interpretation are present, stop.',
+        '- Assume a specialist reader can make one obvious inferential step unaided.',
+        '- Treat In other words / This means that / Taken together / equivalent Chinese summary markers as candidates, not banned phrases. Keep them only when they add mechanism, comparison, quantitative interpretation, condition, citation, or a necessary boundary.',
+        '- Standalone evaluations such as This is an important finding add no information unless they name a concrete consequence; CUT them.',
         '',
-        '## 四、LLM 关联词（llm-associated，概率信号非证据）',
-        '- delve/tapestry/testament/leverage/harness/underscore/pivotal/meticulous 等：全文 ≥2 次且 ≥0.4/千词才提示，单次出现不处理',
-        '- 过渡词（moreover/furthermore/in conclusion/ultimately）≥8 次且 ≥1.5/千词时删除大部分',
-        '- 中文套话（值得注意的是/综上所述/随着…的发展）≥8 次且 ≥2.0/千字符时精简',
+        '## Clarity is not exhaustiveness',
+        '- Clarity requires explicit referents, sufficient reproducibility detail, and necessary reasoning; it does not require spelling out every implication.',
+        '- Keep definitions, non-obvious statistical interpretation, real method detail, and necessary epistemic boundaries. Delete paraphrase that contributes no new scientific information.',
+        '- Reviewer-facing prebuttals, repeated disclaimers, omission defenses, result excuses, legalistic reassurance, and automatic importance summaries are candidates: keep only the independently supported scientific content.',
+        '- For style-only revision with no new science, default to the same length or shorter. Expand only to resolve real ambiguity, reproducibility, or a necessary boundary.',
         '',
-        '## 五、学术文体与格式（academic style / formatting）',
-        '- 抽象副词（remarkably/interestingly/importantly）换成具体数值',
-        '- "significantly" 只提示复核：统计显著性（p<0.05 等）是正当用法，仅无统计证据的修辞性用法需改',
-        // v0.9（0.8.1 P0 修复）：不再机械建议 "the results show"——那会把作者解释升级成证据主张
-        '- "we believe/think" 不应机械改成 "the results show"：若原句表达作者解释，用 "One possible explanation is…" / "This finding may reflect…" / "We interpret this as…"；仅当证据直接支持该结论时才用 "the results show / the data indicate"；模糊词（somewhat/quite/fairly）少堆叠',
-        '- 破折号按密度：全文 ≥5 次且 ≥0.5/千词时删除大部分（范围连字符 30–75 °C 不算）',
-        '- 冒号标题必须前后并列或递进',
+        '## Editing order',
+        '- Use CUT -> PRUNE -> RECAST -> SPLIT.',
+        '- Do not automatically expand one difficult sentence into several explanatory sentences. Split only when multiple independent scientific claims require it.',
+        '- For defensive wording, write the scientific fact rather than the motivation for proving that the authors did not make a mistake.',
         '',
-        '## 六、v0.6 学术质量守卫（Scholarship Lock / 防御饱和 / 句式）',
-        '- Scholarship Lock：润色/改写/去 AI 味时严禁改动数字、百分数、p 值、置信区间、单位、\\cite/\\ref、Figure/Table 编号、DOI；改前先调用 writing_audit(original=原文) 对比',
-        '- 防御饱和：may/might/could/possibly/potentially 密度 ≥5 次且 ≥300/千句时清理；一条 claim 套多层保险（may potentially suggest）必须拆到只剩一层；有证据依据的 hedging 保留（ICMJE）',
-        '- 超长句堆叠：英文 >35 词且 ≥3 从句标记、中文 >80 字且 ≥5 逗号且 ≥3 连接词——拆句',
-        '- 重复绕圈：同段句子高词汇重合且无新增证据时删掉重复圈',
-        '- 强主张（prove/establish/confirm/guarantee）附近必须有证据锚点（数字/统计量/图表引用），否则弱化',
-        '- 作者风格：用 writing_style_profile 学习作者历史论文，新稿件句长分布偏离时向作者靠拢',
-        '- LaTeX 中 Unicode 下标/希腊字母（₁ α）改用数学模式',
+        '## Scientific integrity',
+        '- Style editing must not silently change numbers, units, statistics, citations, Figure/Table references, negation, null findings, causal strength, evidential strength, evidence status, population, condition, or scope.',
+        '- Scientific invariants outrank style, journal fit, and concision. If a better sentence requires unsupported science, QUERY.',
         '',
-        '## 六·v0.8/v0.9 科学完整性锁（Epistemic Lock：主张/否定/scope 守恒）',
-        '- 定位：语言润色不得改变 science——无论往强还是往弱。数字/引用没变 ≠ 没改坏（"associated → caused" 数字没动但结论已变）',
-        '- 双轴模型（v0.9）：因果力（consistent with(0) < associated(1) < predicts(2) < contributes(3) < affects(4) < causes(5)）与证据力（hedge(-1) < suggest(1) < indicate(2) < support(3) < show(4) < demonstrate(5) < establish/confirm(6) < prove(7)）独立检测——"confirmed an association" 是因果力=关联 + 证据力=强，不是因果 L5',
-        '- 子句级多主张（v0.9）：按 ; , while whereas although but and 切分逐子句对齐——"X caused A, while Y may be associated with B" → "Y caused B" 不再被整句最高层掩盖',
-        '- 对齐相似度分档（v0.9）：≥0.70 → high/invariant；0.55–0.70 → medium/invariant；0.45–0.55 → low/candidate（人工复核）',
-        '- 主张强度阶梯（Yila claim-strength ladder，adapted）：修改不得静默沿阶梯移动；"may be associated" → "is associated"（hedge 移除）也是证据力变化',
-        '- 否定守恒："No significant association" → "A significant association" 会翻转负/零结果；no/not/did not/without/non-significant 标记删除按 HIGH 报',
-        '- 零结果守恒：no significant difference / did not improve / remained unchanged 是数据，不得因削弱叙事而删除',
-        '- scope 边界：in this study / under these conditions / 在本研究中… 消失时提示"可能被泛化"——不自动判错，只要求核验',
-        '- 证据状态守恒（v1.0）：reported/observed/measured/implemented/estimated/simulated 等来源状态词消失或被替换时核验——"participants reported improvement" 不能变成 "participants improved"（报告≠事实）；observed → estimated 是状态替换，同样改变读者对证据来源的理解',
-        '- 自动守护：DSH 环境中插件自动捕获 write/edit 前的文本（exec.token 键控，并发编辑不串扰），写入后自动跑 Scholarship + Epistemic Lock（自动路径与手动 writing_audit(original=) 同规则）',
-        '- 命中性质（findingKind）：INVARIANT（不变量，改即事故）/ VIOLATION（明确违规）/ CANDIDATE（防御性候选或低相似度漂移——cue ≠ verdict，可能承担正当边界，勿自动删除）/ ADVISORY（文体建议）',
-        '',
-        '## 七、v0.7 局限性与学术自信（ko5.6sol 借鉴）',
-        '- 自黑免责零容忍：不得出现"完全基于假数据/模型毫无意义/结果完全不可靠/不足为凭"等自我打压套话（AI 安全护栏误触发的过度防御）',
-        '- 局限性改写公式：客观边界 + 未来方向——"本研究采用模拟数据开展敏感性分析" → "下一步可在真实岩心实验中验证"；先区分模拟评估与真实观测，再决定措辞',
-        '- 主张动词校准表：modelled/simulated ≠ observed/measured；suggested/indicated < demonstrated/established；we suggest ≠ we show——按证据强度选词，不夸大也不自贬',
-        '- 纪律边界（ESR）：不得为了"学术自信"删除真实的证据缺口、失效模式、条件限制——局限是证据透明度的一部分，只改措辞不改事实',
-        '- 平均句长参考：英文均值 ≤18 词、中文均值 ≤25 字（ko5.6sol 目标 12–18 词 / 15–25 字）；综述等文体可整体偏长，人工判断',
-        '- 中文"的"字链：连续 ≥3 个"的"的修饰嵌套（"基于X的Y的Z的机制"）拆成短句，主谓宾主干显性化',
-        '- 空洞热词：英文 robust/crucial/exhibits/tailored/interplay/imperative ≥5 次且 ≥1.0/千词、中文 机制/支撑/动态/耦合/范式 ≥10 次且 ≥3.0/千字时——用具体证据替换（术语用法保留）',
-        '',
-        '## 七·v1.3 篇章统计层（局部规则 → 篇章统计 → 科学完整性）',
-        '- 段落节奏（paragraph-rhythm）：碎片化（一句成段 ≥35% 且 ≥3 段）/ 拥塞（段长 > 中位数 2.5 倍 ≥2 段）/ 过度整齐（连续 ≥3 段长度在中位数 ±15% 内 ≥2 处）——按"一个完整论证单元"切段，不按字数',
-        '- 句长节奏（sentence-rhythm-uniformity）：连续 ≥3 句长度在局部中位数 ±15% 内且全文 ≥2 处 → 节奏过匀；有作者 styleProfile 时对比历史 std（当前 < 历史 60% → 更整齐）——句长随信息密度自然变化，不为整齐而整齐',
-        '- 重复逻辑脚手架（repeated-discourse-scaffold）：多个独立段落重复"首先→其次→最后 / 第一→第二→第三 / First→Second→Third / 从X层面→从Y层面"同一种枚举骨架 → 模板化；单次列举正常',
-        '- 标点脚手架（punctuation-scaffold-overload）：同一句内 ≥3 类结构标点（括号/冒号/分号/引号/破折号）聚集——用标点承担句法组织时改写',
-        '- 自创框架词（coined-framework-language）：A-B-C 短线框架（"输入—处理—输出"）、连续多个 XX化/XX力/XX性、XX闭环/赋能机制——candidate，需有定义与来源',
-        '- 空泛判断（generic-claim-candidate）：抽象名词 ≥2 + 无实体/数值/引用 + 无方法动作 + 万能句型，多弱信号同时满足才报（candidate + low）',
-        '- 总结套话位置感知（summary-cliche-positional）：不新增词表——"综上所述/in conclusion" 在每个小节末尾反复出现才报（位置驱动，≥2 个小节末尾）',
-        '- 本地引用完整性（local-citation-integrity）：同目录 .bib 存在时检查 \\cite key 是否真实存在、\\ref ↔ \\label 是否对应、bib 条目是否缺 title/year/author、同一 DOI 是否对应多个 key——零网络确定性检查；"该文献是否支持这句话"留在插件边界外',
-        '- adaptive threshold 原则：有作者 profile → 用历史分布做自适应阈值；无 profile → conservative heuristic，不做固定次数一刀切',
-        '',
-        '## 七·v1.4 期刊写作引擎（Journal Engine）',
-        '- 目标不是"模仿 Nature 风格"，而是从目标期刊 author guidelines + 代表论文中提取可复用的统计规律（Journal Writing Profile）',
-        '- Profile 只保存抽象分布（句长/段长/hedge 密度/因果力/第一人称/被动语态/引用密度），不保存论文原句',
-        '- 用 writing_journal_profile 从代表论文语料生成 profile；用 writing_audit(journalProfile=JSON) 对当前稿件做 section-level Journal Fit',
-        '- Journal Fit 输出每个章节的契合度（如 Results 61%），并列出主要差异（句长/解释密度/因果语言/段落节奏）',
-        '- 优先级：Scientific Invariant > Epistemic Safety > Journal Requirement > Journal Norm > Journal Style——期刊风格永远不能覆盖科学完整性',
-        '',
-        '## 八、发布会原则（扬长避短）',
-        '- 只围绕优势组织论文；不写工作汇报、不主动示弱、不替审稿人攻击自己',
-        '- 打不过的维度不设为比赛项目；不占优的结果从目标/约束/场景解释',
-        '- 优势必须明确说出来；结论只强化记忆点',
-        '',
-        '## 九、提交前自查',
-        '- 用 writing_audit 工具对全文扫描（可指定 profile: manuscript/rebuttal/cover_letter）；高危项必须清零，中危项 ≤3 处，低危项可保留但应说明理由',
-        '- 润色/改写后：用 writing_audit(original=改前原文) 确认 Scholarship Lock 无 HIGH（科研事实未被改动）',
+        '## Deterministic checks',
+        '- The local engine still checks revision residue, measurable style signals, citation structure, Scholarship/Epistemic Lock, journal distributions, delivery leakage, and Word/OOXML integrity.',
+        '- Regex hits are cues, not semantic verdicts. Use the manuscript policy above for final editorial decisions.',
     ].join('\n');
 }
